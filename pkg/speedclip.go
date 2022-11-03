@@ -77,15 +77,11 @@ func Clip(path string, out string, start time.Duration, end time.Duration) error
 
 		startValue, ok := profile["startValue"].(float64)
 		if !ok {
+			// TODO we don't really need this, if empty could assume 0
 			return fmt.Errorf("'startValue' field missing or wrong type")
-		}
-		endValue, ok := profile["endValue"].(float64)
-		if !ok {
-			return fmt.Errorf("'endValue' field missing or wrong type")
 		}
 
 		profileStart := time.Duration(startValue * float64(duration))
-		profileEnd := time.Duration(endValue * float64(duration))
 
 		samples, ok := profile["samples"].([]interface{})
 		if !ok {
@@ -101,35 +97,68 @@ func Clip(path string, out string, start time.Duration, end time.Duration) error
 			return fmt.Errorf("'samples' and 'weights' have different lengths: %v, %v", len(samples), len(weights))
 		}
 
+		if start < 0 || end < 0 {
+			// sum up total duration to calculate offset from end
+			totalDuration := time.Duration(0)
+			for _, wi := range weights {
+				w := wi.(float64)
+				totalDuration += time.Duration(w * float64(duration))
+			}
+
+			if start < 0 {
+				start = totalDuration + start
+			}
+			if end < 0 {
+				end = totalDuration + end
+			}
+		}
+
+		if end != 0 && end < start {
+			return fmt.Errorf("end %v < start %v", end, start)
+		}
+
+		log.Printf("%v %v", start, end)
+
 		origLen := len(samples)
-		current := profileStart
+		current := time.Duration(0)
 		start_i := 0
-		new_start := profileStart
-		new_end := profileEnd
-		haveFirst := false
+		new_start := time.Duration(0)
+		new_end := time.Duration(0)
 		end_i := len(weights)
 
 		// silly linear search for first and last sample
-		for i, wi := range weights {
-			w := wi.(float64)
-			current += time.Duration(w * float64(duration))
-			if !haveFirst && current > start {
-				start_i = i
-				new_start = current
-				haveFirst = true
+		if start > 0 {
+			for i := 0; i < len(weights); i++ {
+				w := weights[i].(float64)
+				current += time.Duration(w * float64(duration))
+				if current >= start {
+					start_i = i
+					new_start = current + profileStart
+					break
+				}
 			}
+		}
 
-			if current > end {
-				end_i = i
-				new_end = current
-				break
+		if end > 0 {
+			for i := start_i; i < len(weights); i++ {
+				w := weights[i].(float64)
+				current += time.Duration(w * float64(duration))
+				if current > end {
+					end_i = i
+					new_end = current + profileStart
+					break
+				}
 			}
 		}
 
 		log.Printf("%v Kept %v/%v: %v -> %v\n", profile["name"], end_i-start_i, origLen, start_i, end_i)
 
-		profile["startValue"] = float64(new_start / duration)
-		profile["endValue"] = float64(new_end / duration)
+		if start > 0 {
+			profile["startValue"] = float64(new_start / duration)
+		}
+		if end > 0 {
+			profile["endValue"] = float64(new_end / duration)
+		}
 		profile["weights"] = weights[start_i:end_i]
 		profile["samples"] = samples[start_i:end_i]
 	}

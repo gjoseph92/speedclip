@@ -44,7 +44,13 @@ Examples:
 
 speedclip --start 33s --end 36.5s profile.json > clipped.json
 
-speedclip --start 5m --end 10m profile.json clipped.json`,
+speedclip --s 1m10.23s profile.json > clipped.json
+
+speedclip --e 30s profile.json > clipped.json
+
+speedclip --start -80s profile.json > clipped.json
+
+speedclip --end -1m5s profile.json > clipped.json`,
 	Args: cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
 		path := args[0]
@@ -68,8 +74,6 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.Flags().DurationVarP(&Start, "start", "s", time.Second, "Start timestamp")
-	rootCmd.Flags().DurationVarP(&End, "end", "e", time.Second, "End timestamp")
-	rootCmd.MarkFlagRequired(("start"))
-	rootCmd.MarkFlagRequired(("end"))
+	rootCmd.Flags().DurationVarP(&Start, "start", "s", 0*time.Second, "Start timestamp")
+	rootCmd.Flags().DurationVarP(&End, "end", "e", 0*time.Second, "End timestamp")
 }
